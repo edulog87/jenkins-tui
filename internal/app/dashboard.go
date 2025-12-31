@@ -155,10 +155,90 @@ func (m *DashboardModel) Update(msg tea.Msg) tea.Cmd {
 			m.goToTop()
 		case "G":
 			m.goToBottom()
+		case "enter":
+			return func() tea.Msg { return DashboardSelectMsg{} }
+		}
+
+	case tea.MouseMsg:
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			return m.handleMouseClick(msg)
 		}
 	}
 	return nil
 }
+
+// handleMouseClick calculates which panel and item was clicked
+func (m *DashboardModel) handleMouseClick(msg tea.MouseMsg) tea.Cmd {
+	// Simple bounds checking for dashboard panels
+	// KPIs are roughly the top 5 lines
+	if msg.Y < 5 {
+		return nil
+	}
+
+	// Calculate column split
+	leftColWidth := m.width / 2
+
+	// Adjust Y for KPI row and borders
+	contentY := msg.Y - 5
+
+	// Left column
+	if msg.X < leftColWidth {
+		// Top panel (Running) or Bottom panel (Nodes)
+		// Each panel has a border and title, so content starts at Y=2 within panel
+		topPanelHeight := 7
+		if contentY < topPanelHeight {
+			// Clicked in Running panel
+			m.selectedPanel = PanelRunning
+			// Header is at Y=1, so items start at Y=2
+			itemIdx := contentY - 2
+			if itemIdx >= 0 && itemIdx < len(m.runningBuilds) {
+				m.selectedRunning = itemIdx
+				// Return a message that the main model will handle to "press Enter"
+				return func() tea.Msg { return DashboardSelectMsg{} }
+			}
+		} else {
+			// Clicked in Nodes panel
+			m.selectedPanel = PanelNodes
+			itemIdx := contentY - topPanelHeight - 2 // -2 for title/border/header
+			if itemIdx >= 0 && itemIdx < len(m.nodes) {
+				m.selectedNode = itemIdx
+				return func() tea.Msg { return DashboardSelectMsg{} }
+			}
+		}
+	} else {
+		// Right column
+		topPanelHeight := 7
+		if contentY < topPanelHeight {
+			// Clicked in Queue panel
+			m.selectedPanel = PanelQueue
+			itemIdx := contentY - 2
+			if itemIdx >= 0 && itemIdx < m.getQueueCount() {
+				m.selectedQueueItem = itemIdx
+				return func() tea.Msg { return DashboardSelectMsg{} }
+			}
+		} else {
+			// Clicked in Recent panel
+			m.selectedPanel = PanelRecent
+			itemIdx := contentY - topPanelHeight - 2
+			if itemIdx >= 0 && itemIdx < len(m.recentBuilds) {
+				m.selectedBuild = itemIdx
+				return func() tea.Msg { return DashboardSelectMsg{} }
+			}
+		}
+	}
+
+	return nil
+}
+
+func (m *DashboardModel) getQueueCount() int {
+	if m.queue == nil {
+		return 0
+	}
+	return len(m.queue.Items)
+}
+
+// DashboardSelectMsg is sent when an item is selected via mouse
+type DashboardSelectMsg struct{}
 
 // Panel navigation
 func (m *DashboardModel) nextPanel() {
@@ -431,7 +511,7 @@ func (m *DashboardModel) renderRunningBuildsPanel(width, height int) string {
 
 		// Table Header
 		header := theme.TableHeaderStyle.Copy().Width(width - 2).Render(
-			fmt.Sprintf("  %-6s %-60s %-12s %-15s", "Build", "Job Name", "Progress", "Node"),
+			fmt.Sprintf("  %-6s %-70s %-12s %-15s", "Build", "Job Name", "Progress", "Node"),
 		)
 		rows = append(rows, header)
 
@@ -460,18 +540,18 @@ func (m *DashboardModel) renderRunningBuildsPanel(width, height int) string {
 					Foreground(theme.Background).
 					Bold(true).
 					Width(width - 2).
-					Render(fmt.Sprintf(" %s#%-5d %-60s %-12s %-15s",
+					Render(fmt.Sprintf(" %s#%-5d %-70s %-12s %-15s",
 						theme.IconRunning,
 						build.BuildNum,
-						truncate(jobName, 60),
+						truncate(jobName, 70),
 						progressBar.Render(),
 						truncate(nodeName, 15),
 					))
 			} else {
-				row = fmt.Sprintf("  %s#%-5d %-60s %-12s %s",
+				row = fmt.Sprintf("  %s#%-5d %-70s %-12s %s",
 					theme.RunningStyle.Render(theme.IconRunning),
 					build.BuildNum,
-					theme.BaseStyle.Render(truncate(jobName, 60)),
+					theme.BaseStyle.Render(truncate(jobName, 70)),
 					progressBar.Render(),
 					theme.MutedStyle.Render(truncate(nodeName, 15)),
 				)
@@ -511,7 +591,7 @@ func (m *DashboardModel) renderNodesPanel(width, height int) string {
 
 		// Table Header
 		header := theme.TableHeaderStyle.Copy().Width(width - 2).Render(
-			fmt.Sprintf("  %-20s %-8s %-15s", "Name", "Exec", "Running"),
+			fmt.Sprintf("  %-20s %-8s %-70s", "Name", "Exec", "Running"),
 		)
 		rows = append(rows, header)
 
@@ -561,9 +641,9 @@ func (m *DashboardModel) renderNodesPanel(width, height int) string {
 					Foreground(theme.Background).
 					Bold(true).
 					Width(width - 2).
-					Render(fmt.Sprintf(" %s %-20s %-8s %-15s", statusIcon, truncate(name, 20), execInfo, truncate(runningJob, 15)))
+					Render(fmt.Sprintf(" %s %-20s %-8s %-70s", statusIcon, truncate(name, 20), execInfo, truncate(runningJob, 70)))
 			} else {
-				runningStr := truncate(runningJob, 15)
+				runningStr := truncate(runningJob, 70)
 				row = fmt.Sprintf("  %s %-20s %-8s %s",
 					statusStyle.Render(statusIcon),
 					truncate(name, 20),
@@ -606,7 +686,7 @@ func (m *DashboardModel) renderQueuePanel(width, height int) string {
 
 		// Table Header
 		header := theme.TableHeaderStyle.Copy().Width(width - 2).Render(
-			fmt.Sprintf("  %-3s %-60s %s", "!", "Job Name", "Wait Time"),
+			fmt.Sprintf("  %-3s %-70s %s", "!", "Job Name", "Wait Time"),
 		)
 		rows = append(rows, header)
 
@@ -644,11 +724,11 @@ func (m *DashboardModel) renderQueuePanel(width, height int) string {
 					Foreground(theme.Background).
 					Bold(true).
 					Width(width - 2).
-					Render(fmt.Sprintf(" %s %-60s %s", statusIcon, truncate(name, 60), waitTime))
+					Render(fmt.Sprintf(" %s %-70s %s", statusIcon, truncate(name, 70), waitTime))
 			} else {
-				row = fmt.Sprintf("  %s %-60s %s",
+				row = fmt.Sprintf("  %s %-70s %s",
 					statusStyle.Render(statusIcon),
-					truncate(name, 60),
+					truncate(name, 70),
 					theme.MutedStyle.Render(waitTime),
 				)
 			}
@@ -681,8 +761,8 @@ func (m *DashboardModel) renderRecentBuildsPanel(width, height int) string {
 	} else {
 		var rows []string
 		maxRows := height - 4
-		if maxRows > 15 {
-			maxRows = 15
+		if maxRows > 25 {
+			maxRows = 25
 		}
 		if maxRows < 1 {
 			maxRows = 1
@@ -690,7 +770,7 @@ func (m *DashboardModel) renderRecentBuildsPanel(width, height int) string {
 
 		// Table Header
 		header := theme.TableHeaderStyle.Copy().Width(width - 2).Render(
-			fmt.Sprintf("  %-6s %-60s %-10s", "Build", "Job Name", "Time"),
+			fmt.Sprintf("  %-6s %-70s %-10s", "Build", "Job Name", "Time"),
 		)
 		rows = append(rows, header)
 
@@ -716,13 +796,13 @@ func (m *DashboardModel) renderRecentBuildsPanel(width, height int) string {
 					Foreground(theme.Background).
 					Bold(true).
 					Width(width - 2).
-					Render(fmt.Sprintf(" %s #%-5d %-60s %s", icon, build.BuildNum, truncate(name, 60), timeAgo))
+					Render(fmt.Sprintf(" %s #%-5d %-70s %s", icon, build.BuildNum, truncate(name, 70), timeAgo))
 			} else {
 				resultStyle := theme.BuildResultStyle(build.Result)
-				row = fmt.Sprintf("  %s #%-5d %-60s %s",
+				row = fmt.Sprintf("  %s #%-5d %-70s %s",
 					icon,
 					build.BuildNum,
-					resultStyle.Render(truncate(name, 60)),
+					resultStyle.Render(truncate(name, 70)),
 					theme.MutedStyle.Render(timeAgo),
 				)
 			}
