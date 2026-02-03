@@ -264,7 +264,39 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
+	// Handle custom app messages
+	switch msg.(type) {
+	case DashboardSelectMsg:
+		if m.activeTab == TabDashboard && m.dashboardModel != nil {
+			cmds = append(cmds, m.handleDashboardSelection())
+		}
+	}
+
 	return m, tea.Batch(cmds...)
+}
+
+func (m *Model) handleDashboardSelection() tea.Cmd {
+	panel := m.dashboardModel.selectedPanel
+	switch panel {
+	case PanelRunning:
+		if m.dashboardModel.selectedRunning < len(m.dashboardModel.runningBuilds) {
+			// build := m.dashboardModel.runningBuilds[m.dashboardModel.selectedRunning]
+			m.activeTab = TabBuilds
+			return m.loadTabData()
+		}
+	case PanelRecent:
+		if m.dashboardModel.selectedBuild < len(m.dashboardModel.recentBuilds) {
+			m.activeTab = TabBuilds
+			return m.loadTabData()
+		}
+	case PanelQueue:
+		m.activeTab = TabViews
+		return m.loadTabData()
+	case PanelNodes:
+		// Nodes don't have a tab yet, maybe stay here or go to dashboard root
+		return nil
+	}
+	return nil
 }
 
 // View implements tea.Model
