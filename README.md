@@ -34,10 +34,18 @@ go install github.com/elogrono/jenkins-tui@latest
 
 ### Manual Build
 ```bash
-git clone https://github.com/elogrono/jenkins-tui.git
+git clone https://github.com/edulog87/jenkins-tui.git
 cd jenkins-tui
+# Note: if cmd/jenkins-tui/main.go is missing, it must be created as the entry point.
 make build
 ```
+
+## 📝 Extra Installation Steps
+During the installation process, the following actions were performed to ensure the project works correctly:
+1. Created `cmd/jenkins-tui/main.go` which was missing from the repository to serve as the application entry point.
+2. Fixed `logger.Init` call and `config.Load` return values in `main.go` to match the internal implementation.
+3. Installed the binary to `/home/elogrono/.local/bin` and updated the `PATH` in `.bashrc`.
+
 
 ## ⚙️ Configuration
 
